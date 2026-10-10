@@ -1,0 +1,40 @@
+
+name: Taiwan Stock Radar V1
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # Taiwan 18:00 = UTC 10:00
+    - cron: "0 10 * * 1-5"
+    # Taiwan 22:40 = UTC 14:40
+    - cron: "40 14 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Inspect radar entry point
+        run: |
+          echo "Radar Python files:"
+          find radar -maxdepth 3 -type f -name "*.py" -print
