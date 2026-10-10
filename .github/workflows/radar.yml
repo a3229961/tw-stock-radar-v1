@@ -3,24 +3,29 @@ name: Taiwan Stock Radar V1
 
 on:
   workflow_dispatch:
-
   schedule:
-    # Taiwan 18:00 = UTC 10:00
+    # 台灣時間 18:00
     - cron: "0 10 * * 1-5"
-    # Taiwan 22:40 = UTC 14:40
+    # 台灣時間 22:40
     - cron: "40 14 * * 1-5"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: stock-radar-database
+  cancel-in-progress: false
 
 jobs:
   radar:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -29,12 +34,62 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install -r requirements.txt
 
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Inspect radar entry point
+      - name: Run real stock market scan
         run: |
-          echo "Radar Python files:"
-          find radar -maxdepth 3 -type f -name "*.py" -print
+          python -m radar.main --max-days 8 --lookback 260
+
+      - name: Validate downloaded market data
+        run: |
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+
+          db = Path("data/radar.sqlite")
+          assert db.exists(), "SQLite database missing"
+
+          con = sqlite3.connect(db)
+          prices = con.execute(
+              "SELECT COUNT(*) FROM prices"
+          ).fetchone()[0]
+
+          markets = con.execute(
+              "SELECT COUNT(DISTINCT market) FROM prices"
+          ).fetchone()[0]
+
+          print("Stored price records:", prices)
+          print("Markets with data:", markets)
+
+          assert prices > 0, "No market prices downloaded"
+          assert markets == 2, "TWSE or TPEx data missing"
+          PY
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-radar-results
+          path: |
+            output/
+            docs/
+          retention-days: 30
+
+      - name: Save database and public reports
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -f data/radar.sqlite
+          git add docs/
+          git add output/radar_latest.xlsx
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Update stock radar data and reports"
+            git push origin HEAD:main
+          fi
