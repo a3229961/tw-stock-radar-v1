@@ -42,7 +42,7 @@ jobs:
 
       - name: Run real stock market scan
         run: |
-          python -m radar.main --max-days 8 --lookback 260
+          python -m radar.main --max-days 30 --lookback 260
 
       - name: Validate downloaded market data
         run: |
