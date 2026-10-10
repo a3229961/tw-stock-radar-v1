@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "generated_at_taipei": "2026-10-11T00:05:32.073894+08:00",
+    "latest_data_date": "2026-10-08",
+    "total_symbols_in_database": 1980,
+    "symbols_with_80_bars": 0,
+    "history_coverage_pct": 0.0,
+    "latest_day_symbols_by_market": {
+      "TPEX": 867,
+      "TWSE": 1083
+    },
+    "ranked_count": 0,
+    "complete_full_market_scan": false,
+    "branch_coverage": "NOT_IMPLEMENTED_V1",
+    "caveats": [
+      "V1 4-digit symbol filter is a proxy, not a verified common-stock security master.",
+      "No corporate-action-adjusted prices; do not infer split/dividend adjusted signals.",
+      "Historical score acceleration uses same-day price features; no chip/branch scoring.",
+      "Market-wide coverage cannot be certified without verified official universe.",
+      "Github scheduled jobs may run late; no direct ChatGPT task ingestion guarantee."
+    ]
+  },
+  "top": []
+}
