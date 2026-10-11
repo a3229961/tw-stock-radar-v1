@@ -209,4 +209,4 @@ async function load(){
  }catch(e){txt($('asof'),'載入失敗');txt($('notice'),'讀取 report.json 失敗：'+e.message+'。請透過 GitHub Pages 瀏覽本頁，確認JSON已發布。');$('rows').replaceChildren();}
 }
 ['q','market','sort'].forEach(id=>$(id).addEventListener(id==='q'?'input':'change',draw));load();
-</script></body></html>'''')))
+</script></body></html>''')))
