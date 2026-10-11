@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-SIGNAL_PRIORITY = {"START": 0, "EARLY": 1, "FOLLOW": 2, "WATCH": 3, "HOT": 4}
+SIGNAL_PRIORITY = {"START": 0, "EARLY": 1, "PREP": 2, "FOLLOW": 3, "WATCH": 4, "HOT": 5}
 FIELDS = (
     "date market code name close volume turnover tech_score impulse_signal "
     "impulse_label impulse_strength impulse_age_bars impulse_last_event_date "
@@ -53,7 +53,7 @@ def select_impulse_stocks(ranking, limit=80):
 def market_impulse_summary(ranking, latest):
     if ranking.empty:
         return {
-            "latest_data_date": latest, "new_start_count": 0, "new_early_count": 0,
+            "latest_data_date": latest, "new_start_count": 0, "new_early_count": 0, "prep_count": 0,
             "follow_count": 0, "watch_count": 0, "hot_count": 0,
             "recent_3bar_events": 0, "eligible": 0,
         }
@@ -63,12 +63,13 @@ def market_impulse_summary(ranking, latest):
         "latest_data_date": latest,
         "new_start_count": int(types.get("START", 0)),
         "new_early_count": int(types.get("EARLY", 0)),
+        "prep_count": int(types.get("PREP", 0)),
         "follow_count": int(types.get("FOLLOW", 0)),
         "watch_count": int(types.get("WATCH", 0)),
         "hot_count": int(types.get("HOT", 0)),
         "recent_3bar_events": int(age.between(0, 2).sum()),
         "eligible": int(len(ranking)),
-        "method": "OHLCV_PV_IMPULSE_HEURISTIC_V1",
+        "method": "OHLCV_PV_IMPULSE_HEURISTIC_V2_PREP",
         "branch_verified": False,
     }
 
