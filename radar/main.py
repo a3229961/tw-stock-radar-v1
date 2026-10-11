@@ -16,6 +16,7 @@ from .branch_signals import load_branch_trades, enrich_ranking, branch_summary, 
 from .dashboard import render_dashboard
 from .catalog import build_catalog
 from .pump_export import publish_impulse, impulse_excel_view
+from .signal_validation import aggregate_validation, sample_records_for_excel
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOG=logging.getLogger('radar')
@@ -30,7 +31,7 @@ def days_to_fetch(conn,today,lookback,max_days):
 def export(conn,outdir,docsdir,day):
     outdir.mkdir(parents=True,exist_ok=True);docsdir.mkdir(parents=True,exist_ok=True)
     prices=read_prices(conn)
-    ranking, history=screen(prices,return_history=True)
+    ranking, history, validation_data=screen(prices,return_history=True,return_validation=True)
     branch_data, branch_status = load_branch_trades(ROOT/'data'/'branch_trades.csv')
     log=pd.read_sql_query('SELECT * FROM fetch_log ORDER BY date DESC,market',conn)
     latest=prices['date'].max() if not prices.empty else None
@@ -60,11 +61,34 @@ def export(conn,outdir,docsdir,day):
     )
     summary['impulse_signals']=impulse_info
     summary['chart_shards']=len(chart_shards)
-    summary['caveats'].append('Impulse signals are OHLCV-only heuristics, not verified branch accumulation or backtested returns.')
+    validation=aggregate_validation(
+        validation_data["records"],validation_data["pending"],
+        validation_data["events"],latest
+    )
+    (docsdir/'signal_validation.json').write_text(
+        json.dumps(validation,ensure_ascii=False,separators=(',',':'),
+                   default=str,allow_nan=False),encoding='utf-8'
+    )
+    summary['signal_validation']={
+        'method':validation['model'],
+        'entry_rule':validation['entry_rule'],
+        'event_count':validation['event_count'],
+        'interpretation_status':validation['interpretation']['status'],
+    }
+    summary['caveats'].append('OHLCV momentum observations are not verified branch accumulation or out-of-sample forecast accuracy.')
+    summary['caveats'].append('Historical event statistics use next-session open, exclude censored horizons, and omit costs/corporate actions.')
     with pd.ExcelWriter(outdir/'radar_latest.xlsx',engine='openpyxl') as w:
         (ranking.head(50) if not ranking.empty else pd.DataFrame({'status':['尚無80根完整K線，無法產生正式排名']})).to_excel(w,'技術雷達',index=False)
         impulse_excel_view(impulse_candidates,'當日沒有達到拉抬觀察條件的股票').to_excel(w,'量價起漲候選',index=False)
         impulse_excel_view(impulse_hot,'當日沒有符合過熱門檻的股票').to_excel(w,'短線過熱警示',index=False)
+        pd.DataFrame(validation['sample_rows']).rename(columns={
+            'stage':'訊號類型','horizon':'持有交易日',
+            'sample_count':'已完成樣本數','pending_or_incomplete':'尚待觀察／資料不完整',
+            'mean_pct':'平均報酬率%','median_pct':'中位數報酬率%',
+            'positive_rate_pct':'正報酬占比%','mean_worst_intraperiod_pct':'平均期間最差低點%',
+            'sample_status':'樣本狀態',
+        }).to_excel(w,'訊號歷史統計',index=False)
+        sample_records_for_excel(validation['recent_completed_5d_events']).to_excel(w,'已完成5日案例',index=False)
         pd.DataFrame([summary]).to_excel(w,'覆蓋率',index=False)
         log.head(200).to_excel(w,'資料擷取紀錄',index=False)
         for sheet in w.book:
@@ -81,7 +105,8 @@ def export(conn,outdir,docsdir,day):
         top=top.astype(object).where(pd.notna(top),None)
     report={'summary':summary,'top':top.to_dict('records') if not top.empty else [],
             'score_rules':SCORE_RULES,'branch_profiles':profiles(),
-            'impulse_summary':impulse_info,'impulse_top':impulse_candidates.head(40).astype(object).where(pd.notna(impulse_candidates.head(40)),None).to_dict('records') if not impulse_candidates.empty else []}
+            'impulse_summary':impulse_info,'impulse_top':impulse_candidates.head(40).astype(object).where(pd.notna(impulse_candidates.head(40)),None).to_dict('records') if not impulse_candidates.empty else [],
+            'validation_status':validation['interpretation']['status']}
     (docsdir/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str,allow_nan=False),encoding='utf-8')
     catalog=build_catalog(prices,ranking,latest)
     (docsdir/'radar_all.json').write_text(json.dumps(catalog,ensure_ascii=False,separators=(',',':'),default=str,allow_nan=False),encoding='utf-8')
