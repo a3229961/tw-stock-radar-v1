@@ -14,6 +14,7 @@ from .storage import connect,store,read_prices
 from .engine import screen
 from .branch_signals import load_branch_trades, enrich_ranking, branch_summary, profiles
 from .dashboard import render_dashboard
+from .catalog import build_catalog
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOG=logging.getLogger('radar')
@@ -72,6 +73,8 @@ def export(conn,outdir,docsdir,day):
     report={'summary':summary,'top':top.to_dict('records') if not top.empty else [],
             'branch_profiles':profiles()}
     (docsdir/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str,allow_nan=False),encoding='utf-8')
+    catalog=build_catalog(prices,ranking,latest)
+    (docsdir/'radar_all.json').write_text(json.dumps(catalog,ensure_ascii=False,separators=(',',':'),default=str,allow_nan=False),encoding='utf-8')
     (docsdir/'index.html').write_text(render_dashboard(),encoding='utf-8')
     LOG.info('Coverage: %s',summary)
 
