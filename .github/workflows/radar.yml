@@ -3,6 +3,10 @@ name: Taiwan Stock Radar V1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'run-radar-now.txt'
   schedule:
     # 台灣時間 18:00
     - cron: "0 10 * * 1-5"
