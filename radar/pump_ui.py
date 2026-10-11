@@ -54,7 +54,7 @@ DETAIL = r"""
 <div class="pv-head"><h2>最近65根日K線與量能</h2><span class="tag">紅漲／綠跌</span></div>
 <div id="pv-chart-status" class="pv-note">正在準備資料…</div>
 <div class="pv-chart"><svg id="pv-chart" role="img" aria-label="價量K線及疑似拉抬訊號時間點" viewBox="0 0 1000 500"></svg></div>
-<p class="pv-note">紅線：MA5｜藍線：MA20｜<span style="color:#7fe8bd">▲</span>當日首次疑似啟動｜<span style="color:#fac178">◆</span>過熱。所有標記只採用當天及以前的行情，不是模仿圖片中無法驗證的私有指標。</p>
+<p class="pv-note">紅線：MA5｜藍線：MA20｜<span style="color:#7fe8bd">▲</span>放量啟動／初期｜<span style="color:#90d6ff">▲</span>低量突破前兆｜<span style="color:#fac178">◆</span>過熱。所有標記只採用當天及以前的行情，不是模仿圖片中無法驗證的私有指標。</p>
 </section>
 """
 JS = r"""
