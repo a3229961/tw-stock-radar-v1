@@ -1,6 +1,6 @@
 {
   "summary": {
-    "generated_at_taipei": "2026-10-11T19:30:54.981977+08:00",
+    "generated_at_taipei": "2026-10-11T21:06:06.849479+08:00",
     "latest_data_date": "2026-10-08",
     "total_symbols_in_database": 1991,
     "symbols_with_80_bars": 1970,
@@ -18,7 +18,8 @@
       "Historical score acceleration uses same-day price features; no chip/branch scoring.",
       "Market-wide coverage cannot be certified without verified official universe.",
       "Github scheduled jobs may run late; no direct ChatGPT task ingestion guarantee.",
-      "Impulse signals are OHLCV-only heuristics, not verified branch accumulation or backtested returns."
+      "OHLCV momentum observations are not verified branch accumulation or out-of-sample forecast accuracy.",
+      "Historical event statistics use next-session open, exclude censored horizons, and omit costs/corporate actions."
     ],
     "branch_data_status": {
       "source_status": "MISSING_SOURCE",
@@ -40,7 +41,13 @@
       "method": "OHLCV_PV_IMPULSE_HEURISTIC_V2_PREP",
       "branch_verified": false
     },
-    "chart_shards": 18
+    "chart_shards": 18,
+    "signal_validation": {
+      "method": "ohlcv-validation-v1",
+      "entry_rule": "NEXT_SESSION_OPEN",
+      "event_count": 3956,
+      "interpretation_status": "RETROSPECTIVE_IN_SAMPLE_NOT_PROSPECTIVE"
+    }
   },
   "top": [
     {
@@ -6894,5 +6901,6 @@
       "branch_overnight_risk": null,
       "branch_source": null
     }
-  ]
+  ],
+  "validation_status": "RETROSPECTIVE_IN_SAMPLE_NOT_PROSPECTIVE"
 }
