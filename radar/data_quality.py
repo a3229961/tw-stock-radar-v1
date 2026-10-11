@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from .market_holidays import confirmed_closure, EQUITY_CLOSED_2026, CALENDAR_VERSION, SOURCES
 MIN_BASE_ROWS = {"TWSE": 600, "TPEX": 400}
 # Reject a daily scrape missing >15% of the normal recorded stock symbols.
 RELATIVE_MIN_FRACTION = 0.85
@@ -149,7 +150,8 @@ def make_quality_report(conn, prices, today=None):
     since=(today - dt.timedelta(days=45)).isoformat()
     recent_rejected = [x for x in history if x["status"] in
                        ("quality_rejected", "error", "empty_unverified")
-                       and x["date"] >= since]
+                       and x["date"] >= since
+                       and confirmed_closure(x["date"]) is None]
     # A failed RECHECK must not overwrite the last accepted 'ok' snapshot.
     # Recheck problems are separately captured as attempts.
     attempts=conn.execute(
@@ -158,6 +160,8 @@ def make_quality_report(conn, prices, today=None):
     ).fetchall()
     observed={(x["date"],x["market"],x["status"]) for x in recent_rejected}
     for d,m,status,n,detail,checked_at in attempts:
+        if confirmed_closure(d) is not None:
+            continue
         key=(d,m,status)
         if key in observed:
             continue
@@ -221,7 +225,7 @@ def make_quality_report(conn, prices, today=None):
         known = set(complete_days)
         for i in range((today - earliest).days + 1):
             d = earliest + dt.timedelta(days=i)
-            if d.weekday() < 5 and d.isoformat() not in known and d <= today:
+            if d.weekday() < 5 and confirmed_closure(d) is None and d.isoformat() not in known and d <= today:
                 weekday_unverified.append(d.isoformat())
     failures = [
         {**r, "note": ("可能是假日、官方來源問題、部分資料或尚未回補，不能自行判定為休市")}
@@ -235,6 +239,16 @@ def make_quality_report(conn, prices, today=None):
         "verified_both_market_sessions": len(complete_days),
         "last_45d_accepted_snapshots": len(recent_accepted),
         "last_45d_problem_snapshots": len(recent_rejected),
+        "confirmed_official_closures_last_45d": [
+            {"date":date,"reason":reason} for date,reason in EQUITY_CLOSED_2026.items()
+            if since <= date <= today.isoformat()
+        ],
+        "official_calendar": {
+            "version":CALENDAR_VERSION,
+            "covered_years":[2026],
+            "sources":SOURCES,
+            "other_years_unverified":True,
+        },
         "recent_problem_snapshots": failures,
         "recent_weekdays_without_verified_market_pairs": weekday_unverified[-20:],
         "session_coverage": coverage,
@@ -242,7 +256,7 @@ def make_quality_report(conn, prices, today=None):
         "status": "PARTIAL_COVERAGE_NOT_CERTIFIED",
         "assumptions": [
             "正式股票普通股母體尚未由證交所與櫃買官方證券分類名冊逐一核對。",
-            "休市日清單尚未接入官方完整日曆，缺漏平日不能自動認定為休市。",
+            "目前只核實並匯入2026年官方股票市場休市日；其他年度與臨時停止交易仍須另行核對。",
             "最近80個市場日完整度以已抓成功的共同日期計算，並非官方市場交易日曆。",
             "除權息、股票分割、減資等調整未接入，異常價差只提示人工審核，不推論錯誤或買賣訊號。",
             "有80筆行情只代表資料長度，不代表資料正確率或所有市場股票都已涵蓋。",
