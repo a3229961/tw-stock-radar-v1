@@ -74,7 +74,7 @@ def detect_price_volume_impulse(frame):
         valid & high10 & (c > ma20) & (c > o)
         & (position >= .70) & (day_pct >= 2.0)
         & vr.between(.65, 1.349999) & bias.between(-2, 9)
-        & (five_pct <= 15) & rsi.between(38, 77)
+        & (five_pct <= 15) & rsi.ge(38) & rsi.lt(78)
     )
     # Prioritize risk flags regardless of any raw launch feature.
     hot_rsi = (rsi >= 78).fillna(False)
