@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from .pump_signals import detect_price_volume_impulse, summarize_events
+
 
 # V1 原始的10項評分規則；此處是唯一分數規則來源，網頁只負責顯示。
 # 滿分 100，未加入分點或法人買賣超。
@@ -78,17 +80,51 @@ def indicators(df):
     x['score_delta1']=score-score.shift(1);x['score_delta3']=score-score.shift(3);x['score_delta5']=score-score.shift(5)
     # Indicators require 80 bars for stable warmup; no scoring of insufficient history.
     x.loc[np.arange(len(x))<79,['tech_score','score_delta1','score_delta3','score_delta5',*score_columns]]=np.nan
-    return x
+    return detect_price_volume_impulse(x)
 
 
-def screen(prices, min_bars=80):
-    if prices.empty: return pd.DataFrame()
-    result=[]
-    for (market,code),group in prices.groupby(['market','code'],sort=False):
-        if len(group)<min_bars: continue
-        d=indicators(group);last=d.iloc[-1]
-        if pd.isna(last.tech_score): continue
-        rec=last.to_dict();rec['bars']=len(group);result.append(rec)
-    if not result: return pd.DataFrame()
-    out=pd.DataFrame(result)
-    return out.sort_values(['tech_score','volume_ratio'],ascending=[False,False],na_position='last')
+def _chart_value(value, decimals=2):
+    if pd.isna(value):
+        return None
+    return round(float(value), decimals)
+
+
+def screen(prices, min_bars=80, return_history=False, chart_bars=65):
+    """Scan once for both daily signals and past signals shown on mini K charts.
+
+    Default API remains a DataFrame. return_history=True returns
+    (ranking, {market-code: [candles]}) and avoids double recomputation.
+    """
+    if prices.empty:
+        return (pd.DataFrame(), {}) if return_history else pd.DataFrame()
+    result = []
+    history = {}
+    for (market, code), group in prices.groupby(["market", "code"], sort=False):
+        if len(group) < min_bars:
+            continue
+        d = indicators(group)
+        last = d.iloc[-1]
+        if pd.isna(last.tech_score):
+            continue
+        rec = last.to_dict()
+        rec["bars"] = len(group)
+        rec.update(summarize_events(d))
+        result.append(rec)
+        if return_history:
+            candles = []
+            for r in d.tail(chart_bars).itertuples(index=False):
+                candles.append([
+                    str(r.date), _chart_value(r.open), _chart_value(r.high),
+                    _chart_value(r.low), _chart_value(r.close),
+                    int(r.volume) if pd.notna(r.volume) else None,
+                    _chart_value(r.ma5), _chart_value(r.ma20),
+                    str(r.impulse_signal), bool(r.impulse_event),
+                    _chart_value(r.impulse_volume_ratio),
+                ])
+            history[str(market) + "-" + str(code)] = candles
+    if not result:
+        return (pd.DataFrame(), {}) if return_history else pd.DataFrame()
+    out = pd.DataFrame(result).sort_values(
+        ["tech_score", "volume_ratio"], ascending=[False, False], na_position="last"
+    )
+    return (out, history) if return_history else out
