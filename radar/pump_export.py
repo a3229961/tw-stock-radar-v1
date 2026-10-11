@@ -96,8 +96,9 @@ def publish_impulse(docsdir, ranking, history, latest):
     # Browser loads exactly one relevant shard when user selects any stock.
     history_dir = docsdir / "charts"
     history_dir.mkdir(parents=True, exist_ok=True)
-    current = {(str(row.market), str(row.code))
-               for row in ranking[["market", "code"]].itertuples(index=False)}
+    current = ({(str(row.market), str(row.code))
+                for row in ranking[["market", "code"]].itertuples(index=False)}
+               if not ranking.empty else set())
     groups = defaultdict(dict)
     for key, candles in history.items():
         market, code = key.split("-", 1)
