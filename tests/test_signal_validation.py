@@ -97,13 +97,13 @@ def test_empty_or_low_sample_not_called_success_rate():
 def test_market_calendar_excludes_stray_small_market_batches():
     frame,dates=make_test_data()
     normal=frame[["date","market","code"]].copy()
-    stray=pd.DataFrame([{"date":"2026-06-01","market":"TWSE","code":"9988"}])
+    stray=pd.DataFrame([{"date":"2026-02-27","market":"TWSE","code":"9988"}])
     # Single-stock fixture has a 1-stock normal session, so use a separate
     # synthetic multi-stock market for realistic completeness gating.
     copies=[normal.assign(code=str(1000+i)) for i in range(20)]
     full=pd.concat(copies+[stray],ignore_index=True)
     result=market_calendar(full)
-    assert "2026-06-01" not in result["TWSE"] if "2026-06-01" not in dates else True
+    assert "2026-02-27" not in result["TWSE"]
 
 
 def test_normal_scan_contract_and_validation_mode():
