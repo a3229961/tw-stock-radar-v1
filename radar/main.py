@@ -12,6 +12,8 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from .sources import fetch_twse,fetch_tpex
 from .storage import connect,store,read_prices
 from .engine import screen
+from .branch_signals import load_branch_trades, enrich_ranking, branch_summary, profiles
+from .dashboard import render_dashboard
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOG=logging.getLogger('radar')
@@ -27,6 +29,7 @@ def export(conn,outdir,docsdir,day):
     outdir.mkdir(parents=True,exist_ok=True);docsdir.mkdir(parents=True,exist_ok=True)
     prices=read_prices(conn)
     ranking=screen(prices)
+    branch_data, branch_status = load_branch_trades(ROOT/'data'/'branch_trades.csv')
     log=pd.read_sql_query('SELECT * FROM fetch_log ORDER BY date DESC,market',conn)
     latest=prices['date'].max() if not prices.empty else None
     latest_count=prices[prices.date==latest].groupby('market')['code'].nunique().to_dict() if latest else {}
@@ -46,6 +49,10 @@ def export(conn,outdir,docsdir,day):
     if latest:
         ranking=ranking[ranking.date==latest].copy() if not ranking.empty else ranking
     summary['ranked_count']=int(len(ranking))
+    ranking=enrich_ranking(ranking,branch_data,latest) if latest else ranking
+    branch_info=branch_summary(branch_data,branch_status)
+    summary['branch_coverage']='AVAILABLE_PROVISIONAL' if (not ranking.empty and 'branch_score' in ranking and ranking['branch_score'].notna().any()) else 'NOT_AVAILABLE'
+    summary['branch_data_status']=branch_info
     with pd.ExcelWriter(outdir/'radar_latest.xlsx',engine='openpyxl') as w:
         (ranking.head(50) if not ranking.empty else pd.DataFrame({'status':['尚無80根完整K線，無法產生正式排名']})).to_excel(w,'技術雷達',index=False)
         pd.DataFrame([summary]).to_excel(w,'覆蓋率',index=False)
@@ -59,8 +66,13 @@ def export(conn,outdir,docsdir,day):
     if not ranking.empty:
         ranking.head(50).to_csv(docsdir/'radar.csv',index=False,encoding='utf-8-sig')
     else:(docsdir/'radar.csv').write_text('status\ninsufficient_verified_history\n',encoding='utf-8')
-    (docsdir/'report.json').write_text(json.dumps({'summary':summary,'top':ranking.head(50).replace({float('nan'):None}).where(pd.notna(ranking.head(50)),None).to_dict('records') if not ranking.empty else []},ensure_ascii=False,indent=2,default=str),encoding='utf-8')
-    (docsdir/'index.html').write_text('<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><title>台股雷達V1</title><h1>台股雷達 V1</h1><p>僅技術指標，非投資建議；不含18分點。</p><a href="report.json">JSON報告</a> | <a href="radar.csv">CSV</a></html>',encoding='utf-8')
+    top=ranking.head(50).copy() if not ranking.empty else pd.DataFrame()
+    if not top.empty:
+        top=top.astype(object).where(pd.notna(top),None)
+    report={'summary':summary,'top':top.to_dict('records') if not top.empty else [],
+            'branch_profiles':profiles()}
+    (docsdir/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str,allow_nan=False),encoding='utf-8')
+    (docsdir/'index.html').write_text(render_dashboard(),encoding='utf-8')
     LOG.info('Coverage: %s',summary)
 
 
