@@ -1,1 +1,1 @@
-Run OHLCV price-volume rally onset detection V3 and refresh public dashboard, 2026-10-11.
+Verify V3.1 low-volume early-warning detection against 2466 official Sep-21 OHLCV, 2026-10-11.
