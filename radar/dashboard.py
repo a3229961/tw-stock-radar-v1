@@ -1,9 +1,10 @@
 """產生可由 GitHub Pages 直接瀏覽的台股起漲雷達儀表板。"""
 from .pump_ui import augment_dashboard
+from .validation_ui import add_validation_panel
 
 
 def render_dashboard():
-    return augment_dashboard(r'''<!doctype html>
+    return add_validation_panel(augment_dashboard(r'''<!doctype html>
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
@@ -207,4 +208,4 @@ async function load(){
  }catch(e){txt($('asof'),'載入失敗');txt($('notice'),'讀取 report.json 失敗：'+e.message+'。請透過 GitHub Pages 瀏覽本頁，確認JSON已發布。');$('rows').replaceChildren();}
 }
 ['q','market','sort'].forEach(id=>$(id).addEventListener(id==='q'?'input':'change',draw));load();
-</script></body></html>''')
+</script></body></html>'''))
