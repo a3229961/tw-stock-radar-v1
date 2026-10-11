@@ -1,6 +1,6 @@
 {
   "summary": {
-    "generated_at_taipei": "2026-10-11T21:06:06.849479+08:00",
+    "generated_at_taipei": "2026-10-11T22:19:51.412744+08:00",
     "latest_data_date": "2026-10-08",
     "total_symbols_in_database": 1991,
     "symbols_with_80_bars": 1970,
@@ -18,6 +18,8 @@
       "Historical score acceleration uses same-day price features; no chip/branch scoring.",
       "Market-wide coverage cannot be certified without verified official universe.",
       "Github scheduled jobs may run late; no direct ChatGPT task ingestion guarantee.",
+      "History_coverage_pct only counts 80 stored bars and is not an official universe coverage or data accuracy measurement.",
+      "Data quality evidence and unresolved missing sessions are in docs/data_quality.json.",
       "OHLCV momentum observations are not verified branch accumulation or out-of-sample forecast accuracy.",
       "Historical event statistics use next-session open, exclude censored horizons, and omit costs/corporate actions."
     ],
@@ -27,6 +29,18 @@
       "tracked_branches": 18,
       "reference_only": true,
       "notes": "券商分點不等於單一主力；風格標籤出自網路圖片，需由歷史交易驗證。"
+    },
+    "data_quality": {
+      "status": "PARTIAL_COVERAGE_NOT_CERTIFIED",
+      "last_both_markets_verified_date": "2026-10-08",
+      "verified_both_market_sessions": 169,
+      "latest_verified_market_counts": {
+        "TWSE": 1083,
+        "TPEX": 867
+      },
+      "last_45d_problem_snapshots": 6,
+      "recent_80_session_completeness_pct": 87.44,
+      "recent_80_session_status": "READY"
     },
     "impulse_signals": {
       "latest_data_date": "2026-10-08",
