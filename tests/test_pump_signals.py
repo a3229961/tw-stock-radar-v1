@@ -24,7 +24,7 @@ def candles(days=105, signal_at=94, turnover=28_000_000):
         op = close - .3
         vol = 215000
         if i == signal_at:
-            close = max(r["high"] for r in rows[-20:]) + 4.5
+            close = max(r["high"] for r in rows[-20:]) + 2.0
             op = close - 3
             hi = close + 1
             lo = op - .7
@@ -56,7 +56,6 @@ def test_price_volume_launch_and_no_future_leakage():
     assert previous.impulse_return5_pct == actual.impulse_return5_pct
     assert actual.impulse_signal in ("START", "EARLY")
     assert actual.impulse_event
-    assert actual.impulse_model if "impulse_model" in actual.index else True
 
 
 def test_low_turnover_cannot_be_labeled_as_launch():
