@@ -135,7 +135,12 @@ def aggregate_validation(records, pending, total_events, as_of):
         matched = frame.loc[frame.horizon == 5].sort_values(
             ["signal_date", "market", "code"], ascending=[False, True, True]
         )
-        examples = matched.head(80).to_dict("records")
+        examples = (
+            matched.groupby("stage", sort=False, group_keys=False)
+            .head(20)
+            .sort_values(["signal_date", "market", "code"], ascending=[False, True, True])
+            .to_dict("records")
+        )
     return {
         "model": EVAL_VERSION,
         "latest_data_date": as_of,
