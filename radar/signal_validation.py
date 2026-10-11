@@ -74,7 +74,7 @@ def validate_one_stock(data, sessions, market, code):
             window_days = sessions[i + 1:i + horizon + 1]
             window = [rows.get(d) for d in window_days]
             if any(row is None for row in window):
-                incomplete[str(horizon)] += 1
+                incomplete[stage][str(horizon)] += 1
                 continue
             try:
                 entry = float(window[0].open)
@@ -84,7 +84,7 @@ def validate_one_stock(data, sessions, market, code):
                 if not all(math.isfinite(z) and z > 0 for z in [entry, exit_, *lows, *highs]):
                     raise ValueError("invalid price")
             except (TypeError, ValueError):
-                incomplete[str(horizon)] += 1
+                incomplete[stage][str(horizon)] += 1
                 continue
             # Use next-session open instead of unrealistically buying the
             # signal candle's close or low after knowing its final bar.
