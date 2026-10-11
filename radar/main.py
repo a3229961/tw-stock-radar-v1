@@ -18,6 +18,7 @@ from .catalog import build_catalog
 from .pump_export import publish_impulse, impulse_excel_view
 from .signal_validation import aggregate_validation, sample_records_for_excel
 from .data_quality import audit_candidate, MarketBatchRejected, save_quality_report
+from .market_holidays import is_equity_session_candidate, label_past_empty_holidays
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOG=logging.getLogger('radar')
@@ -27,7 +28,7 @@ def days_to_fetch(conn,today,lookback,max_days):
     recorded={x[0] for x in conn.execute("SELECT date FROM fetch_log GROUP BY date HAVING COUNT(DISTINCT CASE WHEN status='ok' THEN market END)=2")}
     # Retry partial failures, do not re-request known market holidays.
     all_days=[today-dt.timedelta(days=i) for i in range((today-start).days+1)]
-    return [d for d in all_days if d.weekday()<5 and d.isoformat() not in recorded][:max_days]
+    return [d for d in all_days if is_equity_session_candidate(d) and d.isoformat() not in recorded][:max_days]
 
 def days_to_recheck(conn, count=2):
     """Double-check recent accepted market sessions for delayed official revisions."""
@@ -172,6 +173,9 @@ def main():
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     (ROOT/'data').mkdir(exist_ok=True);(ROOT/'output').mkdir(exist_ok=True)
     conn=connect(ROOT/'data'/'radar.sqlite')
+    known_holidays=label_past_empty_holidays(conn)
+    if known_holidays:
+        LOG.info('Recognized %d historical empty snapshots as official 2026 holidays',known_holidays)
     session=requests.Session()
     if not args.quality_only:
         unfetched=days_to_fetch(conn,today,args.lookback,args.max_days)
