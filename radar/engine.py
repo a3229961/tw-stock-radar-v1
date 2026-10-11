@@ -2,6 +2,33 @@ import numpy as np
 import pandas as pd
 
 
+# V1 原始的10項評分規則；此處是唯一分數規則來源，網頁只負責顯示。
+# 滿分 100，未加入分點或法人買賣超。
+SCORE_RULES = [
+    {"key": "close_above_ma20", "label": "收盤站上20日均線", "weight": 15, "group": "趨勢結構",
+     "criterion": "收盤價 > MA20"},
+    {"key": "ma20_above_ma60", "label": "20日均線高於60日均線", "weight": 10, "group": "趨勢結構",
+     "criterion": "MA20 > MA60"},
+    {"key": "slope20_positive", "label": "20日均線斜率向上", "weight": 10, "group": "趨勢結構",
+     "criterion": "MA20 五日斜率 > 0%"},
+    {"key": "bias20_reasonable", "label": "20日乖離處於指定範圍", "weight": 15, "group": "價格位置",
+     "criterion": "-2% ≤ MA20乖離 ≤ 8%"},
+    {"key": "volume_ratio", "label": "成交量相對放大", "weight": 10, "group": "量能",
+     "criterion": "1.2 ≤ 量比 ≤ 3.5"},
+    {"key": "rsi14_range", "label": "RSI在指定區間", "weight": 10, "group": "動能",
+     "criterion": "48 ≤ RSI14 ≤ 70"},
+    {"key": "macd_hist_positive", "label": "MACD柱狀體為正", "weight": 10, "group": "動能",
+     "criterion": "MACD柱狀體 > 0"},
+    {"key": "adx_positive_di", "label": "趨勢強度及多方方向", "weight": 10, "group": "動能",
+     "criterion": "ADX14 > 17 且 +DI > -DI"},
+    {"key": "higher_low", "label": "近期低點墊高", "weight": 5, "group": "價格型態",
+     "criterion": "最近10日最低價 > 前10日最低價"},
+    {"key": "range_contraction", "label": "10日價格區間收斂", "weight": 5, "group": "價格型態",
+     "criterion": "最近10日相對振幅 < 前10日相對振幅"},
+]
+assert sum(rule["weight"] for rule in SCORE_RULES) == 100
+
+
 def indicators(df):
     x=df.sort_values('date').copy()
     c=x['close'].astype(float); h=x['high'].astype(float); l=x['low'].astype(float); v=x['volume'].astype(float)
@@ -27,16 +54,30 @@ def indicators(df):
     x['higher_low']=l.rolling(10).min()>l.shift(10).rolling(10).min()
     x['range_contraction']=((h.rolling(10).max()-l.rolling(10).min())/c)<((h.shift(10).rolling(10).max()-l.shift(10).rolling(10).min())/c.shift(10))
     x['breakout20']=c>h.shift(1).rolling(20).max()
-    # Technical score is transparent, never a fabricated institution/chip score.
-    score=(c>x['ma20']).astype(int)*15+(x['ma20']>x['ma60']).astype(int)*10+(x['slope20']>0).astype(int)*10
-    score+=(x['bias20'].between(-2,8)).astype(int)*15+(x['volume_ratio'].between(1.2,3.5)).astype(int)*10
-    score+=(x['rsi14'].between(48,70)).astype(int)*10+(x['macd_hist']>0).astype(int)*10
-    score+=((x['adx14']>17)&(x['plus_di']>x['minus_di'])).astype(int)*10
-    score+=x['higher_low'].astype(int)*5+x['range_contraction'].astype(int)*5
+    # 每一項得分由原始指標直接計算，再加總為 tech_score。
+    # 不另造新評分公式，也不把「20日突破」誤計入原V1的100分。
+    signals={
+        "close_above_ma20": c>x['ma20'],
+        "ma20_above_ma60": x['ma20']>x['ma60'],
+        "slope20_positive": x['slope20']>0,
+        "bias20_reasonable": x['bias20'].between(-2,8),
+        "volume_ratio": x['volume_ratio'].between(1.2,3.5),
+        "rsi14_range": x['rsi14'].between(48,70),
+        "macd_hist_positive": x['macd_hist']>0,
+        "adx_positive_di": (x['adx14']>17)&(x['plus_di']>x['minus_di']),
+        "higher_low": x['higher_low'],
+        "range_contraction": x['range_contraction'],
+    }
+    score_columns=[]
+    for rule in SCORE_RULES:
+        column='score_'+rule['key']
+        x[column]=signals[rule['key']].fillna(False).astype(int)*rule['weight']
+        score_columns.append(column)
+    score=x[score_columns].sum(axis=1)
     x['tech_score']=score
     x['score_delta1']=score-score.shift(1);x['score_delta3']=score-score.shift(3);x['score_delta5']=score-score.shift(5)
     # Indicators require 80 bars for stable warmup; no scoring of insufficient history.
-    x.loc[np.arange(len(x))<79,['tech_score','score_delta1','score_delta3','score_delta5']]=np.nan
+    x.loc[np.arange(len(x))<79,['tech_score','score_delta1','score_delta3','score_delta5',*score_columns]]=np.nan
     return x
 
 

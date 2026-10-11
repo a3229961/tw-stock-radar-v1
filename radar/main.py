@@ -11,7 +11,7 @@ import pandas as pd
 from openpyxl.styles import Font, PatternFill, Alignment
 from .sources import fetch_twse,fetch_tpex
 from .storage import connect,store,read_prices
-from .engine import screen
+from .engine import screen, SCORE_RULES
 from .branch_signals import load_branch_trades, enrich_ranking, branch_summary, profiles
 from .dashboard import render_dashboard
 from .catalog import build_catalog
@@ -71,7 +71,7 @@ def export(conn,outdir,docsdir,day):
     if not top.empty:
         top=top.astype(object).where(pd.notna(top),None)
     report={'summary':summary,'top':top.to_dict('records') if not top.empty else [],
-            'branch_profiles':profiles()}
+            'score_rules':SCORE_RULES,'branch_profiles':profiles()}
     (docsdir/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str,allow_nan=False),encoding='utf-8')
     catalog=build_catalog(prices,ranking,latest)
     (docsdir/'radar_all.json').write_text(json.dumps(catalog,ensure_ascii=False,separators=(',',':'),default=str,allow_nan=False),encoding='utf-8')

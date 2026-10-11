@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .engine import SCORE_RULES
+
 PUBLIC_COLUMNS = (
     "date market code name open high low close volume turnover "
     "ma5 ma10 ma20 ma60 slope5 slope10 slope20 slope60 "
@@ -14,7 +16,11 @@ PUBLIC_COLUMNS = (
     "adx14 plus_di minus_di higher_low range_contraction breakout20 "
     "tech_score score_delta1 score_delta3 score_delta5 bars "
     "branch_score branch_status branch_net5 branch_net20 "
-    "branch_wave_branches branch_overnight_risk"
+    "branch_wave_branches branch_overnight_risk "
+    "score_close_above_ma20 score_ma20_above_ma60 score_slope20_positive "
+    "score_bias20_reasonable score_volume_ratio score_rsi14_range "
+    "score_macd_hist_positive score_adx_positive_di score_higher_low "
+    "score_range_contraction"
 ).split()
 
 
@@ -56,6 +62,7 @@ def build_catalog(prices, ranking, latest):
         "latest_data_date": latest,
         "ranked_count": len(ranked),
         "unranked_count": len(missing),
+        "score_rules": SCORE_RULES,
         "stocks": ranked,
         "unranked": missing,
         "notes": (
