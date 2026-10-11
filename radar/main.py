@@ -47,6 +47,12 @@ def export(conn,outdir,docsdir,day):
     prices=read_prices(conn)
     audit_today=day if isinstance(day,dt.date) else dt.date.fromisoformat(str(day))
     quality=save_quality_report(conn,prices,docsdir/'data_quality.json',today=audit_today)
+    # An isolated new-date feed from only one market must not appear as a
+    # complete next trading session. Preserve the raw rows for QA review,
+    # but publish only up to the last date BOTH markets have accepted.
+    complete_latest=quality['last_both_markets_verified_date']
+    if complete_latest and not prices.empty:
+        prices=prices.loc[prices.date<=complete_latest].copy()
     ranking, history, validation_data=screen(prices,return_history=True,return_validation=True)
     branch_data, branch_status = load_branch_trades(ROOT/'data'/'branch_trades.csv')
     log=pd.read_sql_query('SELECT * FROM fetch_log ORDER BY date DESC,market',conn)
