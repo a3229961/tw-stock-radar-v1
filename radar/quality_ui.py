@@ -45,7 +45,7 @@ JS=r"""
  txt($('qa-message'),
   '最近45天異常批次：'+problems.length+'筆；最近35天沒有完整雙市場成功資料的平日：'+
   (absent.length?absent.slice(-10).join('、'):'無')+
-  '。未驗證的平日可能是休市，也可能是來源異常，不會自行認定為假日。');
+  '。2026年官方休市日已另行排除；未核實的平日仍可能是來源或回補問題。');
  const table=$('qa-issues');table.replaceChildren();
  if(!problems.length){
    const tr=document.createElement('tr');
