@@ -51,6 +51,23 @@ def normalize(date, market, code, name, volume, op, hi, lo, close, value, url):
     return (date.isoformat(),market,code,str(name).strip(),o,h,l,c,int(vol),turnover,url)
 
 
+def unique_rows_or_fail(rows):
+    """Prevent contradictory duplicate quotes from being silently overwritten.
+
+    Repeated identical records from official table sections are harmless.
+    Different OHLCV for one code/day means the source schema needs review.
+    """
+    result={}
+    for row in rows:
+        key=(row[0],row[1],row[2])
+        if key in result:
+            prev=result[key]
+            if (prev[4:10] != row[4:10]) or (prev[3] != row[3]):
+                raise ValueError(f'Conflicting official source rows for {key}')
+        result[key]=row
+    return list(result.values())
+
+
 def parse_twse(payload, date, url):
     if payload.get('stat') not in (None,'OK'): return []
     tables=list(payload.get('tables') or [])
@@ -68,7 +85,7 @@ def parse_twse(payload, date, url):
             try: item=normalize(date,'TWSE',row[code],row[name],row[v],row[o],row[h],row[l],row[c],row[amt] if amt is not None else None,url)
             except (IndexError,TypeError): continue
             if item: out.append(item)
-    return list({(r[1],r[2]):r for r in out}.values())
+    return unique_rows_or_fail(out)
 
 
 def parse_tpex(payload,date,url):
@@ -95,7 +112,7 @@ def parse_tpex(payload,date,url):
                 item=normalize(date,'TPEX',row[0],row[1],row[8],row[4],row[5],row[6],row[2],row[9] if len(row)>9 else None,url)
             else: continue
             if item: out.append(item)
-    return list({(r[1],r[2]):r for r in out}.values())
+    return unique_rows_or_fail(out)
 
 
 def fetch_twse(session,date):
