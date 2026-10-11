@@ -81,13 +81,13 @@ function pvSelectStock(x){
 }
 function pvList(){
  const s=pvFeed.summary||{};
- for(const [id,value] of [['pv-start',s.new_start_count],['pv-early',s.new_early_count],
+ for(const [id,value] of [['pv-start',s.new_start_count],['pv-early',(Number(s.new_early_count||0)+Number(s.prep_count||0))],
      ['pv-recent',s.recent_3bar_events],['pv-hot',s.hot_count]]){
    txt($(id),value===undefined?'—':num(value,0));
  }
  const filter=$('pv-filter').value;
  let items=(pvFeed.candidates||[]).concat(pvFeed.overheated||[]);
- if(filter==='NEW')items=items.filter(x=>['START','EARLY'].includes(x.impulse_signal));
+ if(filter==='NEW')items=items.filter(x=>['START','EARLY','PREP'].includes(x.impulse_signal));
  else if(filter!=='ALL')items=items.filter(x=>x.impulse_signal===filter);
  items=items.slice(0,65);
  const body=$('pv-list');body.replaceChildren();
@@ -106,7 +106,7 @@ function pvList(){
   tr.addEventListener('keydown',e=>{if(e.key==='Enter')pvSelectStock(x)});
   body.append(tr);
  }
- txt($('pv-msg'),'顯示 '+items.length+' 檔。形態分數不是漲幅機率；「過熱」為風險訊號，非追價清單。');
+ txt($('pv-msg'),'顯示 '+items.length+' 檔。低量前兆尚無量能確認；型態分數不是漲幅機率；「過熱」為風險訊號，非追價清單。');
 }
 function pvDrawChart(bars){
  const svg=$('pv-chart');svg.replaceChildren();
@@ -142,7 +142,7 @@ function pvDrawChart(bars){
     ' 低 '+num(low)+' 收 '+num(close)+' 量比 '+num(ratio)));
   svg.append(bar);
   if(event===true)svg.append(pvEl('text',{x:x,y:Math.min(bottom-4,y(low)+17),
-     fill:'#8cf2c8','text-anchor':'middle','font-size':17},'▲'));
+     fill:stage==='PREP'?'#90d6ff':'#8cf2c8','text-anchor':'middle','font-size':17},'▲'));
   else if(stage==='HOT')svg.append(pvEl('text',{x:x,y:Math.max(top+14,y(high)-12),
      fill:'#ffc178','text-anchor':'middle','font-size':16},'◆'));
   if(i===0||i===bars.length-1||i%10===0)
