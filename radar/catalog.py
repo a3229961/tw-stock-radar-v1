@@ -20,7 +20,11 @@ PUBLIC_COLUMNS = (
     "score_close_above_ma20 score_ma20_above_ma60 score_slope20_positive "
     "score_bias20_reasonable score_volume_ratio score_rsi14_range "
     "score_macd_hist_positive score_adx_positive_di score_higher_low "
-    "score_range_contraction"
+    "score_range_contraction "
+    "impulse_signal impulse_label impulse_strength impulse_last_event_date "
+    "impulse_age_bars impulse_recent_events impulse_return1_pct impulse_return5_pct "
+    "impulse_volume_ratio impulse_close_position impulse_breakout10 impulse_breakout20 "
+    "impulse_overheat impulse_risk_flags impulse_reason impulse_model"
 ).split()
 
 
