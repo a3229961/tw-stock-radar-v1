@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from .pump_signals import detect_price_volume_impulse, summarize_events
+from .signal_validation import market_calendar, validate_one_stock
 
 
 # V1 原始的10項評分規則；此處是唯一分數規則來源，網頁只負責顯示。
@@ -89,16 +90,22 @@ def _chart_value(value, decimals=2):
     return round(float(value), decimals)
 
 
-def screen(prices, min_bars=80, return_history=False, chart_bars=65):
+def screen(prices, min_bars=80, return_history=False, chart_bars=65, return_validation=False):
     """Scan once for both daily signals and past signals shown on mini K charts.
 
     Default API remains a DataFrame. return_history=True returns
-    (ranking, {market-code: [candles]}) and avoids double recomputation.
+    (ranking, {market-code: [candles]}).
+    return_validation=True returns (ranking, history, validation_data).
     """
     if prices.empty:
-        return (pd.DataFrame(), {}) if return_history else pd.DataFrame()
+        empty=(pd.DataFrame(), {}, {"records": [], "pending": {}, "events": 0})
+        return empty if return_validation else ((empty[0], empty[1]) if return_history else empty[0])
     result = []
     history = {}
+    sessions = market_calendar(prices) if return_validation else {}
+    validation_records = []
+    validation_pending = {}
+    validation_events = 0
     for (market, code), group in prices.groupby(["market", "code"], sort=False):
         if len(group) < min_bars:
             continue
@@ -110,6 +117,17 @@ def screen(prices, min_bars=80, return_history=False, chart_bars=65):
         rec["bars"] = len(group)
         rec.update(summarize_events(d))
         result.append(rec)
+        if return_validation:
+            market_key=str(market)
+            observed, incomplete, n_events = validate_one_stock(
+                d, sessions.get(market_key, []), market_key, str(code)
+            )
+            validation_records.extend(observed)
+            validation_events += n_events
+            for stage, counts in incomplete.items():
+                dest = validation_pending.setdefault(stage, {})
+                for h, amount in counts.items():
+                    dest[h] = dest.get(h, 0) + amount
         if return_history:
             candles = []
             for r in d.tail(chart_bars).itertuples(index=False):
@@ -123,8 +141,15 @@ def screen(prices, min_bars=80, return_history=False, chart_bars=65):
                 ])
             history[str(market) + "-" + str(code)] = candles
     if not result:
-        return (pd.DataFrame(), {}) if return_history else pd.DataFrame()
+        empty=pd.DataFrame()
+        if return_validation:
+            return (empty, history, {"records":validation_records,
+                                    "pending":validation_pending,"events":validation_events})
+        return (empty,history) if return_history else empty
     out = pd.DataFrame(result).sort_values(
         ["tech_score", "volume_ratio"], ascending=[False, False], na_position="last"
     )
+    if return_validation:
+        return (out, history, {"records": validation_records,
+                               "pending": validation_pending, "events": validation_events})
     return (out, history) if return_history else out
