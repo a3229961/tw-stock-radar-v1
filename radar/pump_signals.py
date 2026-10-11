@@ -9,6 +9,7 @@ import pandas as pd
 SIGNAL_NAMES = {
     "START": "疑似拉抬啟動",
     "EARLY": "起漲初期觀察",
+    "PREP": "低量突破前兆",
     "FOLLOW": "量價推升延續",
     "HOT": "短線過熱・勿追",
     "WATCH": "量價異動觀察",
@@ -17,18 +18,19 @@ SIGNAL_NAMES = {
 SIGNAL_DESCRIPTIONS = {
     "START": "突破前20日高點、放量且收盤位置偏強；仍須觀察隔日是否站穩。",
     "EARLY": "突破前10日高點或重新站回20日線並放量；尚非確定主力進場。",
+    "PREP": "低量突破前10日高點且收盤偏強，但未見足夠量能確認；僅列低信心前兆觀察。",
     "FOLLOW": "近期曾觸發啟動訊號，價量仍在延續；不代表適合追高。",
     "HOT": "RSI／乖離／短期漲幅出現過熱風險；優先列為風險警示。",
     "WATCH": "有價量轉強跡象但尚未達確認門檻；適合繼續觀察。",
     "NONE": "未達本模型的量價啟動門檻。",
 }
-SIGNAL_MODEL_VERSION = "pv-impulse-v1"
+SIGNAL_MODEL_VERSION = "pv-impulse-v2-prep"
 
 
 def detect_price_volume_impulse(frame):
     """Return a copy with signal columns; input must already include engine indicators.
 
-    START / EARLY are *new* daily signals, FOLLOW covers 1–3 trading days
+    START / EARLY / PREP are *new* daily signals, FOLLOW covers 1–3 trading days
     after a prior trigger. HOT overrides buy-interest types.
     """
     x = frame.copy()
@@ -64,6 +66,16 @@ def detect_price_volume_impulse(frame):
     baseline = valid & (c > ma20) & good_close & early_position & volume_shock
     launch = baseline & high20 & (vr >= 1.55) & (day_pct >= 2.0)
     potential = baseline & (high10 | cross20)
+    # Price can start its first breakout before volume expansion (e.g. 2466).
+    # PREP has *lower confidence* and is never an actual 主力進場 claim.
+    # It needs a 10-day closing breakout, strong candle, moderate momentum,
+    # adequate cash turnover, but volume ratio below the 1.35 confirmation bar.
+    prep = (
+        valid & high10 & (c > ma20) & (c > o)
+        & (position >= .70) & (day_pct >= 2.0)
+        & vr.between(.65, 1.349999) & bias.between(-2, 9)
+        & (five_pct <= 15) & rsi.ge(38) & rsi.lt(78)
+    )
     # Prioritize risk flags regardless of any raw launch feature.
     hot_rsi = (rsi >= 78).fillna(False)
     hot_bias = (bias >= 12).fillna(False)
@@ -72,23 +84,24 @@ def detect_price_volume_impulse(frame):
     hot = valid & (hot_rsi | hot_bias | hot_5d | hot_10d)
     cooling = valid & ((rsi >= 74) | (bias >= 9) | (five_pct >= 19))
     # Mark a new launch after a quiet period; not each consecutive candle.
-    any_trigger = launch | potential
+    any_trigger = launch | potential | prep
     recently_triggered = pd.Series(False, index=x.index)
     for lag in (1, 2, 3):
         recently_triggered |= any_trigger.shift(lag, fill_value=False).astype(bool)
     first_trigger = any_trigger & ~recently_triggered
     new_start = first_trigger & launch & ~hot & ~cooling
-    new_early = first_trigger & ~launch & ~hot & ~cooling
+    new_early = first_trigger & potential & ~launch & ~hot & ~cooling
+    new_prep = first_trigger & prep & ~hot & ~(new_start | new_early)
     follow = recently_triggered & valid & (c >= ma5) & (vr >= .85) & ~hot
     watch = (valid & (c > ma20) & good_close &
              (vr >= 1.15) & (bias <= 8) & (five_pct < 17) & ~hot)
     labels = np.select(
-        [hot, new_start, new_early, follow, watch],
-        ["HOT", "START", "EARLY", "FOLLOW", "WATCH"],
+        [hot, new_start, new_early, new_prep, follow, watch],
+        ["HOT", "START", "EARLY", "PREP", "FOLLOW", "WATCH"],
         default="NONE"
     )
     x["impulse_signal"] = labels
-    x["impulse_event"] = new_start | new_early
+    x["impulse_event"] = new_start | new_early | new_prep
     x["impulse_volume_ratio"] = vr
     x["impulse_return1_pct"] = day_pct
     x["impulse_return5_pct"] = five_pct
@@ -127,7 +140,7 @@ def detect_price_volume_impulse(frame):
     return x
 
 
-def summarize_events(indicator_frame, window=10):
+def summarize_events(indicator_frame, window=30):
     """Latest stock signal summary with trigger date and age in trading bars."""
     if indicator_frame.empty:
         return {}

@@ -135,3 +135,18 @@ def test_overheat_overrides_any_early_rally_interpretation():
     assert latest.impulse_overheat
     assert latest.impulse_event == False
     assert "5日漲幅過大" in latest.impulse_risk_flags
+
+
+def test_low_volume_breakout_is_precursor_not_confirmed_start():
+    # A stock can break out before volume catches up, like the 2466 case.
+    data = candles(days=95, signal_at=94)
+    last = data.index[-1]
+    data.loc[last, "volume"] = 180000
+    data.loc[last, "turnover"] = 19_000_000
+    result = indicators(data)
+    latest = result.iloc[-1]
+    assert 0.65 <= latest.impulse_volume_ratio < 1.35
+    assert latest.impulse_breakout10
+    assert latest.impulse_signal == "PREP"
+    assert latest.impulse_event
+    assert "未見足夠量能" in latest.impulse_reason
