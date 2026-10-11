@@ -10,13 +10,14 @@ import requests
 import pandas as pd
 from openpyxl.styles import Font, PatternFill, Alignment
 from .sources import fetch_twse,fetch_tpex
-from .storage import connect,store,read_prices
+from .storage import connect,store,read_prices,replace_market_snapshot,record_attempt
 from .engine import screen, SCORE_RULES
 from .branch_signals import load_branch_trades, enrich_ranking, branch_summary, profiles
 from .dashboard import render_dashboard
 from .catalog import build_catalog
 from .pump_export import publish_impulse, impulse_excel_view
 from .signal_validation import aggregate_validation, sample_records_for_excel
+from .data_quality import audit_candidate, MarketBatchRejected, save_quality_report
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOG=logging.getLogger('radar')
@@ -28,9 +29,24 @@ def days_to_fetch(conn,today,lookback,max_days):
     all_days=[today-dt.timedelta(days=i) for i in range((today-start).days+1)]
     return [d for d in all_days if d.weekday()<5 and d.isoformat() not in recorded][:max_days]
 
+def days_to_recheck(conn, count=2):
+    """Double-check recent accepted market sessions for delayed official revisions."""
+    if count<=0:
+        return []
+    dates=conn.execute(
+        """SELECT date FROM fetch_log
+           WHERE status='ok'
+           GROUP BY date HAVING COUNT(DISTINCT market)=2
+           ORDER BY date DESC LIMIT ?""",(count,)
+    ).fetchall()
+    return [dt.date.fromisoformat(d[0]) for d in dates]
+
+
 def export(conn,outdir,docsdir,day):
     outdir.mkdir(parents=True,exist_ok=True);docsdir.mkdir(parents=True,exist_ok=True)
     prices=read_prices(conn)
+    audit_today=day if isinstance(day,dt.date) else dt.date.fromisoformat(str(day))
+    quality=save_quality_report(conn,prices,docsdir/'data_quality.json',today=audit_today)
     ranking, history, validation_data=screen(prices,return_history=True,return_validation=True)
     branch_data, branch_status = load_branch_trades(ROOT/'data'/'branch_trades.csv')
     log=pd.read_sql_query('SELECT * FROM fetch_log ORDER BY date DESC,market',conn)
@@ -56,6 +72,17 @@ def export(conn,outdir,docsdir,day):
     branch_info=branch_summary(branch_data,branch_status)
     summary['branch_coverage']='AVAILABLE_PROVISIONAL' if (not ranking.empty and 'branch_score' in ranking and ranking['branch_score'].notna().any()) else 'NOT_AVAILABLE'
     summary['branch_data_status']=branch_info
+    summary['data_quality']={
+        'status':quality['status'],
+        'last_both_markets_verified_date':quality['last_both_markets_verified_date'],
+        'verified_both_market_sessions':quality['verified_both_market_sessions'],
+        'latest_verified_market_counts':quality['latest_verified_market_counts'],
+        'last_45d_problem_snapshots':quality['last_45d_problem_snapshots'],
+        'recent_80_session_completeness_pct':quality['session_coverage']['latest_80_session_completeness_pct'],
+        'recent_80_session_status':quality['session_coverage']['status'],
+    }
+    summary['caveats'].append('History_coverage_pct only counts 80 stored bars and is not an official universe coverage or data accuracy measurement.')
+    summary['caveats'].append('Data quality evidence and unresolved missing sessions are in docs/data_quality.json.')
     impulse_info, impulse_candidates, impulse_hot, chart_shards = publish_impulse(
         docsdir, ranking, history, latest
     )
@@ -90,6 +117,17 @@ def export(conn,outdir,docsdir,day):
         }).to_excel(w,'訊號歷史統計',index=False)
         sample_records_for_excel(validation['recent_completed_5d_events']).to_excel(w,'已完成5日案例',index=False)
         pd.DataFrame([summary]).to_excel(w,'覆蓋率',index=False)
+        pd.DataFrame([{
+            '項目':'資料品質總覽',
+            '最後雙市場成功日期':quality['last_both_markets_verified_date'],
+            '成功市場日期數':quality['verified_both_market_sessions'],
+            '最近45日問題批次數':quality['last_45d_problem_snapshots'],
+            '近期80市場日資料完整率%':quality['session_coverage']['latest_80_session_completeness_pct'],
+            '80市場日狀態':quality['session_coverage']['status'],
+            '全市場普通股已完整驗證':'否（尚需官方證券名冊及完整交易日曆）',
+        }]).to_excel(w,'資料品質總覽',index=False)
+        pd.DataFrame(quality['recent_problem_snapshots'] or
+            [{'狀態':'最近45日尚無已記錄的來源錯誤或不完整批次'}]).to_excel(w,'待補抓與異常',index=False)
         log.head(200).to_excel(w,'資料擷取紀錄',index=False)
         for sheet in w.book:
             sheet.freeze_panes='A2';sheet.auto_filter.ref=sheet.dimensions
@@ -115,27 +153,63 @@ def export(conn,outdir,docsdir,day):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--max-days',type=int,default=8);p.add_argument('--lookback',type=int,default=260);p.add_argument('--date',default=None);args=p.parse_args()
+    p=argparse.ArgumentParser()
+    p.add_argument('--max-days',type=int,default=8)
+    p.add_argument('--lookback',type=int,default=260)
+    p.add_argument('--recheck-recent',type=int,default=2,
+                   help='Re-download N recent successful market sessions for official revisions')
+    p.add_argument('--date',default=None)
+    p.add_argument('--quality-only',action='store_true',
+                   help='Rebuild quality report and output from existing SQLite without downloading')
+    args=p.parse_args()
     today=dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(ZoneInfo('Asia/Taipei')).date()
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     (ROOT/'data').mkdir(exist_ok=True);(ROOT/'output').mkdir(exist_ok=True)
-    conn=connect(ROOT/'data'/'radar.sqlite');session=requests.Session()
-    # Per-market fetch logs are tracked separately, so a failure on one source is retryable.
-    for day in days_to_fetch(conn,today,args.lookback,args.max_days):
-        for market,func in [('TWSE',fetch_twse),('TPEX',fetch_tpex)]:
-            old=conn.execute('SELECT status FROM fetch_log WHERE date=? AND market=?',(day.isoformat(),market)).fetchone()
-            if old and old[0] in ('ok','holiday'):continue
-            try:
-                rows=func(session,day)
-                if rows:
-                    store(conn,day.isoformat(),market,rows,'ok');LOG.info('%s %s: %d',day,market,len(rows))
-                else:
-                    # Could be source schema drift rather than holiday. Do not mark weekday empty as holiday.
-                    store(conn,day.isoformat(),market,[],'empty_unverified','No rows; holiday or schema drift');LOG.warning('%s %s empty',day,market)
-            except Exception as exc:
-                store(conn,day.isoformat(),market,[],'error',str(exc));LOG.error('%s %s %s',day,market,exc)
-            time.sleep(float(os.getenv('SOURCE_DELAY_SECONDS','2')))
+    conn=connect(ROOT/'data'/'radar.sqlite')
+    session=requests.Session()
+    if not args.quality_only:
+        unfetched=days_to_fetch(conn,today,args.lookback,args.max_days)
+        recheck=days_to_recheck(conn,args.recheck_recent)
+        recheck_set=set(recheck)
+        days=list(dict.fromkeys(unfetched+recheck))
+        LOG.info('Fetch %s unresolved weekdays and recheck %s accepted sessions',len(unfetched),len(recheck))
+        for day in days:
+            day_text=day.isoformat()
+            for market,func in [('TWSE',fetch_twse),('TPEX',fetch_tpex)]:
+                old=conn.execute(
+                    'SELECT status FROM fetch_log WHERE date=? AND market=?',
+                    (day_text,market)
+                ).fetchone()
+                if old and old[0]=='ok' and day not in recheck_set:
+                    continue
+                if old and old[0]=='holiday':
+                    continue
+                try:
+                    rows=func(session,day)
+                    if not rows:
+                        # Empty weekday is not automatically a holiday.
+                        record_attempt(conn,day_text,market,'empty_unverified',0,
+                                       'No parsed rows; official holiday or source schema drift')
+                        LOG.warning('%s %s empty/unverified',day,market)
+                        continue
+                    try:
+                        checks=audit_candidate(conn,day_text,market,rows)
+                    except MarketBatchRejected as exc:
+                        record_attempt(conn,day_text,market,'quality_rejected',len(rows),str(exc))
+                        LOG.error('%s %s REJECTED: %s',day,market,exc)
+                        continue
+                    saved=replace_market_snapshot(
+                        conn,day_text,market,rows,
+                        detail=f"batch_min={checks['minimum_accepted_rows']}; value_suspects={checks['turnover_suspects']}"
+                    )
+                    LOG.info('%s %s: %d VERIFIED; revisions=%s new=%s gone=%s',
+                             day,market,len(rows),saved['changed'],saved['added'],saved['removed'])
+                except Exception as exc:
+                    record_attempt(conn,day_text,market,'error',0,str(exc))
+                    LOG.error('%s %s source error: %s',day,market,exc)
+                time.sleep(float(os.getenv('SOURCE_DELAY_SECONDS','2')))
     export(conn,ROOT/'output',ROOT/'docs',today)
     conn.close()
+
 
 if __name__=='__main__':main()
