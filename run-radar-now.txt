@@ -1,1 +1,1 @@
-Verify V3.1 low-volume early-warning detection against 2466 official Sep-21 OHLCV, 2026-10-11.
+Validate V4 signal follow-through at next-session open for 1/3/5/10 trading sessions; refresh public report, 2026-10-11.
