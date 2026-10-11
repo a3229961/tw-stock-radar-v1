@@ -1,1 +1,1 @@
-Generate transparent V1 technical score breakdown and publish V2 clickable detail cards, 2026-10-11.
+Run OHLCV price-volume rally onset detection V3 and refresh public dashboard, 2026-10-11.
