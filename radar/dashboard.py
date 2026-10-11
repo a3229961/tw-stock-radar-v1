@@ -43,10 +43,10 @@ a{color:#a5d6ff}
 <div class="card"><div class="muted">分點資料狀態</div><div class="metric" id="branch" style="font-size:20px">讀取中</div></div>
 </div>
 <div class="warning" id="notice">本頁的技術分數是規則評分，不等於勝率或買進建議。分點資料不完整時，籌碼分數顯示「未提供」。</div>
-<section class="card"><h2>技術起漲觀察榜</h2><div class="sub">依原V1技術分數和成交量比排序；點選個股查看指標及分點資料狀態。</div>
+<section class="card"><h2>技術起漲觀察榜</h2><div class="sub">搜尋範圍為完整技術排名，而非僅前50名；點選個股查看指標與分點資料狀態。預設只顯示排序前100檔以保持載入速度。</div>
 <div class="toolbar"><input id="q" placeholder="搜尋代號或股票名稱" aria-label="股票搜尋"><select id="market"><option value="">上市＋上櫃</option><option value="TWSE">上市</option><option value="TPEX">上櫃</option></select><select id="sort"><option value="tech_score">技術評分</option><option value="volume_ratio">成交量比</option><option value="score_delta5">五日分數增幅</option><option value="turnover">成交金額</option><option value="branch_score">分點品質分數</option></select></div>
 <div class="scroll"><table class="stock-table"><thead><tr><th>股票</th><th>市場</th><th>收盤</th><th>技術分數</th><th>分點分數</th><th>量比</th><th>MA20乖離</th><th>五日增幅</th></tr></thead><tbody id="rows"><tr><td colspan="8">載入中…</td></tr></tbody></table></div>
-<div class="sub" id="count" style="margin-top:12px"></div></section>
+<div class="sub" id="count" style="margin-top:12px"></div><div class="sub" id="searchinfo" style="margin-top:10px"></div></section>
 <section class="card detail" id="detail"><h2 id="stocktitle">個股指標</h2><div class="scoregrid">
 <div><div class="muted">技術分數</div><div class="score" id="dt-tech">—</div></div>
 <div><div class="muted">分點品質</div><div class="score" id="dt-branch">—</div></div>
@@ -58,6 +58,8 @@ a{color:#a5d6ff}
 'use strict';
 const $=id=>document.getElementById(id);
 let stocks=[];
+let unranked=[];
+let searchReady=false;
 function num(v,d=2){return v===null||v===undefined||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function txt(node,s){node.textContent=String(s);}
 function cell(tr,s,cl){let td=document.createElement('td');td.textContent=s;if(cl)td.className=cl;tr.appendChild(td);}
@@ -73,15 +75,28 @@ function showDetail(x){
 }
 function draw(){
  let q=$('q').value.trim().toLowerCase(),m=$('market').value,key=$('sort').value;
+ $('detail').classList.remove('on');
  let data=stocks.filter(x=>(!m||x.market===m)&&(!q||(String(x.code)+' '+String(x.name)).toLowerCase().includes(q)))
    .sort((a,b)=>(Number(b[key]??-999999)-Number(a[key]??-999999))||(Number(b.tech_score)-Number(a.tech_score)));
  const body=$('rows');body.replaceChildren();
- if(!data.length){let tr=document.createElement('tr');cell(tr,'沒有符合條件的股票');body.appendChild(tr);}
- data.forEach(x=>{let tr=document.createElement('tr');tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','查看'+x.name+'詳細資料');
+ const shown=data.slice(0,100);
+ if(!shown.length){let tr=document.createElement('tr');cell(tr,'沒有符合篩選條件的已排名股票');body.appendChild(tr);}
+ shown.forEach(x=>{let tr=document.createElement('tr');tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','查看'+x.name+'詳細資料');
  cell(tr,x.name+' ('+x.code+')');cell(tr,x.market==='TWSE'?'上市':'上櫃');cell(tr,num(x.close));cell(tr,num(x.tech_score,0),'pos');
  cell(tr,x.branch_score==null?'未提供':num(x.branch_score,1));cell(tr,num(x.volume_ratio)+'×');cell(tr,num(x.bias20)+'%');cell(tr,num(x.score_delta5,0));
  tr.addEventListener('click',()=>showDetail(x));tr.addEventListener('keydown',e=>{if(e.key==='Enter')showDetail(x);});body.appendChild(tr);});
- txt($('count'),'顯示 '+data.length+' 檔（公開報告最多50檔），不是全市場完整候選清單');
+ txt($('count'),'顯示 '+shown.length+' 檔／符合條件 '+data.length+' 檔；搜尋來源 '+(searchReady?'完整技術排名':'僅前50名備援資料')+'（預設最多顯示100列）');
+ if(!searchReady){txt($('searchinfo'),'完整股票清單尚未載入，暫時無法判定不在前50名的股票。');return;}
+ if(!q){txt($('searchinfo'),'可用股票名稱或代號搜尋資料庫全部股票；未達80根K線的股票會另外說明。');return;}
+ if(data.length){txt($('searchinfo'),'已於全部 '+stocks.length+' 檔技術排名中找到 '+data.length+' 檔。');return;}
+ const matches=unranked.filter(x=>(!m||x.market===m)&&(String(x.code)+' '+String(x.name)).toLowerCase().includes(q));
+ if(matches.length){
+    txt($('searchinfo'),matches.slice(0,8).map(x=>
+      x.name+'（'+x.code+'）：'+(x.status==='INSUFFICIENT_HISTORY'?'歷史K線不足80根':'沒有當日完整技術排名')+
+      '；已儲存 '+x.bars+' 根，最後行情 '+x.last_data_date).join('；'));
+ }else{
+    txt($('searchinfo'),'完整資料庫中找不到符合「'+q+'」的股票。可能未被目前V1的四碼代號或行情來源收錄，並不代表該證券不存在。');
+ }
 }
 async function load(){
  try{
@@ -92,8 +107,17 @@ async function load(){
   txt($('ranked'),num(s.ranked_count,0));
   txt($('branch'),s.branch_coverage==='AVAILABLE_PROVISIONAL'?'試算中':'尚無完整資料');
   if(s.branch_coverage==='AVAILABLE_PROVISIONAL')txt($('notice'),'籌碼評分為初步試算，請檢查完整性、來源合法性及歷史回測；不可當成保證勝率。');
+  try{
+   const full=await fetch('radar_all.json',{cache:'no-store'});if(!full.ok)throw new Error('HTTP '+full.status);
+   const catalog=await full.json();
+   if(!Array.isArray(catalog.stocks)||!Array.isArray(catalog.unranked))throw new Error('完整名單格式不符');
+   stocks=catalog.stocks;unranked=catalog.unranked;searchReady=true;
+  }catch(err){
+   searchReady=false;
+   txt($('notice'),'完整清單暫時讀取失敗，以下僅有前50名，不能據此判斷股票沒有行情。'+err.message);
+  }
   draw();
- }catch(e){txt($('asof'),'載入失敗');txt($('notice'),'讀取 report.json 失敗：'+e.message+'。請透過 GitHub Pages 瀏覽本頁，確認JSON已發布。');txt($('rows'),'');}
+ }catch(e){txt($('asof'),'載入失敗');txt($('notice'),'讀取 report.json 失敗：'+e.message+'。請透過 GitHub Pages 瀏覽本頁，確認JSON已發布。');$('rows').replaceChildren();}
 }
 ['q','market','sort'].forEach(id=>$(id).addEventListener(id==='q'?'input':'change',draw));load();
 </script></body></html>'''
