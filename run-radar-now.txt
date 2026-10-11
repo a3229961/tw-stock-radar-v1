@@ -1,1 +1,1 @@
-Validate V4 signal follow-through at next-session open for 1/3/5/10 trading sessions; refresh public report, 2026-10-11.
+Run V5 market data quality validation, recent snapshot recheck, and full official TWSE/TPEx radar refresh. 2026-10-11.
