@@ -75,7 +75,7 @@ def detect_price_volume_impulse(frame):
     any_trigger = launch | potential
     recently_triggered = pd.Series(False, index=x.index)
     for lag in (1, 2, 3):
-        recently_triggered |= any_trigger.shift(lag).fillna(False).astype(bool)
+        recently_triggered |= any_trigger.shift(lag, fill_value=False).astype(bool)
     first_trigger = any_trigger & ~recently_triggered
     new_start = first_trigger & launch & ~hot & ~cooling
     new_early = first_trigger & ~launch & ~hot & ~cooling
