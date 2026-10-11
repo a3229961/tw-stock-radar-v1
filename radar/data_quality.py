@@ -146,9 +146,28 @@ def make_quality_report(conn, prices, today=None):
     last_date = str(prices["date"].max()) if not prices.empty else None
     recent_accepted = [x for x in successful if x["date"] >=
                        (today - dt.timedelta(days=45)).isoformat()]
+    since=(today - dt.timedelta(days=45)).isoformat()
     recent_rejected = [x for x in history if x["status"] in
                        ("quality_rejected", "error", "empty_unverified")
-                       and x["date"] >= (today - dt.timedelta(days=45)).isoformat()]
+                       and x["date"] >= since]
+    # A failed RECHECK must not overwrite the last accepted 'ok' snapshot.
+    # Recheck problems are separately captured as attempts.
+    attempts=conn.execute(
+        """SELECT date,market,status,rows,detail,checked_at FROM fetch_attempts
+           WHERE date>=? AND status!='ok' ORDER BY id DESC LIMIT 160""",(since,)
+    ).fetchall()
+    observed={(x["date"],x["market"],x["status"]) for x in recent_rejected}
+    for d,m,status,n,detail,checked_at in attempts:
+        key=(d,m,status)
+        if key in observed:
+            continue
+        recent_rejected.append({
+            "date":d,"market":m,"status":status,
+            "logged_rows":int(n),"stored_rows":None,
+            "detail":str(detail),"checked_at":checked_at,
+        })
+        observed.add(key)
+    recent_rejected.sort(key=lambda r:r["date"],reverse=True)
     latest_counts = {
         m: int(prices.loc[(prices.date == last_both) & (prices.market == m), "code"].nunique())
         if last_both and not prices.empty else 0
@@ -199,7 +218,7 @@ def make_quality_report(conn, prices, today=None):
             (today - dt.timedelta(days=35)),
             dt.date.fromisoformat(min(x["date"] for x in history)) if history else today,
         )
-        known = set(x["date"] for x in successful)
+        known = set(complete_days)
         for i in range((today - earliest).days + 1):
             d = earliest + dt.timedelta(days=i)
             if d.weekday() < 5 and d.isoformat() not in known and d <= today:
