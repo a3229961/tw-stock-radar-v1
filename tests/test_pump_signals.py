@@ -118,3 +118,20 @@ def test_homepage_contains_signal_panel_and_valid_javascript():
 def test_last_day_has_no_signal_without_80_bars():
     result=indicators(candles(days=79,signal_at=78))
     assert result.iloc[-1].impulse_signal == "NONE"
+
+
+def test_overheat_overrides_any_early_rally_interpretation():
+    data=candles(days=95,signal_at=94)
+    i=data.index[-1]
+    data.loc[i,"close"]=155
+    data.loc[i,"open"]=140
+    data.loc[i,"high"]=158
+    data.loc[i,"low"]=139
+    data.loc[i,"volume"]=1_100_000
+    data.loc[i,"turnover"]=175_000_000
+    result=indicators(data)
+    latest=result.iloc[-1]
+    assert latest.impulse_signal=="HOT"
+    assert latest.impulse_overheat
+    assert latest.impulse_event == False
+    assert "5日漲幅過大" in latest.impulse_risk_flags
