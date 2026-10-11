@@ -15,6 +15,7 @@ from .engine import screen, SCORE_RULES
 from .branch_signals import load_branch_trades, enrich_ranking, branch_summary, profiles
 from .dashboard import render_dashboard
 from .catalog import build_catalog
+from .pump_export import publish_impulse, impulse_excel_view
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOG=logging.getLogger('radar')
@@ -29,7 +30,7 @@ def days_to_fetch(conn,today,lookback,max_days):
 def export(conn,outdir,docsdir,day):
     outdir.mkdir(parents=True,exist_ok=True);docsdir.mkdir(parents=True,exist_ok=True)
     prices=read_prices(conn)
-    ranking=screen(prices)
+    ranking, history=screen(prices,return_history=True)
     branch_data, branch_status = load_branch_trades(ROOT/'data'/'branch_trades.csv')
     log=pd.read_sql_query('SELECT * FROM fetch_log ORDER BY date DESC,market',conn)
     latest=prices['date'].max() if not prices.empty else None
@@ -54,8 +55,16 @@ def export(conn,outdir,docsdir,day):
     branch_info=branch_summary(branch_data,branch_status)
     summary['branch_coverage']='AVAILABLE_PROVISIONAL' if (not ranking.empty and 'branch_score' in ranking and ranking['branch_score'].notna().any()) else 'NOT_AVAILABLE'
     summary['branch_data_status']=branch_info
+    impulse_info, impulse_candidates, impulse_hot, chart_shards = publish_impulse(
+        docsdir, ranking, history, latest
+    )
+    summary['impulse_signals']=impulse_info
+    summary['chart_shards']=len(chart_shards)
+    summary['caveats'].append('Impulse signals are OHLCV-only heuristics, not verified branch accumulation or backtested returns.')
     with pd.ExcelWriter(outdir/'radar_latest.xlsx',engine='openpyxl') as w:
         (ranking.head(50) if not ranking.empty else pd.DataFrame({'status':['尚無80根完整K線，無法產生正式排名']})).to_excel(w,'技術雷達',index=False)
+        impulse_excel_view(impulse_candidates,'當日沒有達到拉抬觀察條件的股票').to_excel(w,'量價起漲候選',index=False)
+        impulse_excel_view(impulse_hot,'當日沒有符合過熱門檻的股票').to_excel(w,'短線過熱警示',index=False)
         pd.DataFrame([summary]).to_excel(w,'覆蓋率',index=False)
         log.head(200).to_excel(w,'資料擷取紀錄',index=False)
         for sheet in w.book:
@@ -71,7 +80,8 @@ def export(conn,outdir,docsdir,day):
     if not top.empty:
         top=top.astype(object).where(pd.notna(top),None)
     report={'summary':summary,'top':top.to_dict('records') if not top.empty else [],
-            'score_rules':SCORE_RULES,'branch_profiles':profiles()}
+            'score_rules':SCORE_RULES,'branch_profiles':profiles(),
+            'impulse_summary':impulse_info,'impulse_top':impulse_candidates.head(40).astype(object).where(pd.notna(impulse_candidates.head(40)),None).to_dict('records') if not impulse_candidates.empty else []}
     (docsdir/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,default=str,allow_nan=False),encoding='utf-8')
     catalog=build_catalog(prices,ranking,latest)
     (docsdir/'radar_all.json').write_text(json.dumps(catalog,ensure_ascii=False,separators=(',',':'),default=str,allow_nan=False),encoding='utf-8')
