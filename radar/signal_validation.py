@@ -164,11 +164,6 @@ def aggregate_validation(records, pending, total_events, as_of):
     }
 
 
-def evaluate_all_stocks(prices, horizon_input=None):
-    """Used by scanner; avoid repeated expensive indicator recomputation."""
-    raise NotImplementedError("Use evaluate_one_stock within engine.screen")
-
-
 def sample_records_for_excel(records):
     if not records:
         return pd.DataFrame({"狀態": ["歷史訊號尚未有可完整觀察的交易期間"]})
