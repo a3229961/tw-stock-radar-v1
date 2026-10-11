@@ -44,11 +44,11 @@ def market_calendar(prices):
 def validate_one_stock(data, sessions, market, code):
     """Return only completed events, and count how many horizons are pending."""
     if data.empty or not sessions:
-        return [], {str(h): 0 for h in HORIZONS}, 0
+        return [], {}, 0
     rows = {str(r.date): r for r in data.itertuples(index=False)}
     day_index = {day: i for i, day in enumerate(sessions)}
     observed = []
-    incomplete = {str(h): 0 for h in HORIZONS}
+    incomplete = defaultdict(lambda: {str(h): 0 for h in HORIZONS})
     total = 0
     last_hot_date_index = -10_000
     for r in data.itertuples(index=False):
@@ -67,7 +67,7 @@ def validate_one_stock(data, sessions, market, code):
         total += 1
         for horizon in HORIZONS:
             if i + horizon >= len(sessions):
-                incomplete[str(horizon)] += 1
+                incomplete[stage][str(horizon)] += 1
                 continue
             # If even one intervening market session is missing for the stock,
             # the event cannot be evaluated at this horizon.
@@ -99,7 +99,7 @@ def validate_one_stock(data, sessions, market, code):
                 "max_adverse_pct": round(100 * (min(lows) / entry - 1), 4),
                 "max_favorable_pct": round(100 * (max(highs) / entry - 1), 4),
             })
-    return observed, incomplete, total
+    return observed, dict(incomplete), total
 
 
 def aggregate_validation(records, pending, total_events, as_of):
