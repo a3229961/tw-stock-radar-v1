@@ -11,6 +11,7 @@ CSS = r"""
 .pv-stage{display:inline-block;border-radius:8px;padding:5px 9px;background:#284158;color:#c7d8ee;font-size:12px;font-weight:650}
 .pv-stage.START{background:#1d5b49;color:#8df1c2}
 .pv-stage.EARLY{background:#224f6b;color:#a8e2ff}
+.pv-stage.PREP{background:#164b5c;color:#98dfec}
 .pv-stage.FOLLOW{background:#37446b;color:#c4c7ff}
 .pv-stage.HOT{background:#694021;color:#ffca99}
 .pv-stage.WATCH{background:#4b4852;color:#d4d4e8}
@@ -28,12 +29,13 @@ PANEL = r"""
 <p class="pv-note">結合價量突破、成交量比、收盤強弱、均線、RSI與短期過熱檢查；找早期的起漲訊號，也把已大漲的股票另外列出，不會把所有放量股都當成買點。</p>
 <div class="pv-grid">
 <div class="pv-mini"><span class="muted">當日疑似啟動</span><strong id="pv-start">—</strong></div>
-<div class="pv-mini"><span class="muted">起漲初期觀察</span><strong id="pv-early">—</strong></div>
+<div class="pv-mini"><span class="muted">初期／低量前兆</span><strong id="pv-early">—</strong></div>
 <div class="pv-mini"><span class="muted">3個交易日內曾啟動</span><strong id="pv-recent">—</strong></div>
 <div class="pv-mini"><span class="muted">短線過熱警示</span><strong id="pv-hot">—</strong></div>
 </div>
 <div class="toolbar"><select id="pv-filter" aria-label="量價推升訊號篩選">
-<option value="NEW">當日啟動＋起漲初期</option>
+<option value="NEW">啟動＋初期＋低量前兆</option>
+<option value="PREP">低量突破前兆（較低確認度）</option>
 <option value="FOLLOW">拉抬延續</option>
 <option value="WATCH">觀察訊號</option>
 <option value="HOT">過熱警示（非推薦）</option>
@@ -57,7 +59,7 @@ DETAIL = r"""
 """
 JS = r"""
 // OHLCV impulse module. JS modifies visualization, not the Python signal logic.
-const PV_STAGE = {START:'疑似拉抬啟動',EARLY:'起漲初期觀察',
+const PV_STAGE = {START:'疑似拉抬啟動',EARLY:'起漲初期觀察',PREP:'低量突破前兆',
  FOLLOW:'量價推升延續',WATCH:'量價異動觀察',HOT:'短線過熱勿追',NONE:'尚無訊號'};
 const pvCache = new Map();
 let pvFeed = {summary:{},candidates:[],overheated:[]};
