@@ -1,15 +1,31 @@
 {
-  "generated_at": "2026-10-11T14:18:08.623720+00:00",
-  "last_price_date_in_database": "2026-10-08",
-  "last_both_markets_verified_date": "2026-10-08",
+  "generated_at": "2026-10-16T02:32:19.107062+00:00",
+  "last_price_date_in_database": "2026-10-15",
+  "last_both_markets_verified_date": "2026-10-15",
   "latest_verified_market_counts": {
     "TWSE": 1083,
-    "TPEX": 867
+    "TPEX": 872
   },
-  "verified_both_market_sessions": 169,
-  "last_45d_accepted_snapshots": 58,
-  "last_45d_problem_snapshots": 6,
+  "verified_both_market_sessions": 173,
+  "last_45d_accepted_snapshots": 60,
+  "last_45d_problem_snapshots": 8,
   "recent_problem_snapshots": [
+    {
+      "date": "2026-10-16",
+      "market": "TPEX",
+      "status": "empty_unverified",
+      "logged_rows": 0,
+      "stored_rows": 0,
+      "note": "可能是假日、官方來源問題、部分資料或尚未回補，不能自行判定為休市"
+    },
+    {
+      "date": "2026-10-16",
+      "market": "TWSE",
+      "status": "empty_unverified",
+      "logged_rows": 0,
+      "stored_rows": 0,
+      "note": "可能是假日、官方來源問題、部分資料或尚未回補，不能自行判定為休市"
+    },
     {
       "date": "2026-10-09",
       "market": "TPEX",
@@ -62,17 +78,25 @@
   "recent_weekdays_without_verified_market_pairs": [
     "2026-09-25",
     "2026-09-28",
-    "2026-10-09"
+    "2026-10-09",
+    "2026-10-16"
   ],
   "session_coverage": {
     "status": "READY",
     "observed_complete_sessions": 80,
     "required_sessions": 80,
     "latest_80_session_full_symbols": 1705,
-    "latest_80_session_reference_symbols": 1950,
-    "latest_80_session_completeness_pct": 87.44
+    "latest_80_session_reference_symbols": 1955,
+    "latest_80_session_completeness_pct": 87.21
   },
   "potential_unadjusted_corporate_actions": [
+    {
+      "date": "2026-10-13",
+      "market": "TPEX",
+      "code": "3085",
+      "name": "新零售",
+      "gap_pct": 33.9
+    },
     {
       "date": "2026-04-20",
       "market": "TPEX",
